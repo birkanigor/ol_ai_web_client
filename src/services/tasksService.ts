@@ -27,6 +27,7 @@ export interface TaskRecord {
   application_name: string
   request_name: string
   request_body: Record<string, unknown> | null
+  response: Record<string, unknown> | null
   error: string | null
 }
 
@@ -41,8 +42,24 @@ export async function getTasks(): Promise<TaskRecord[]> {
   return data.data
 }
 
+interface GetTaskResponse {
+  status: string
+  data: TaskRecord
+  message: string
+}
+
+export async function getTaskById(taskId: number): Promise<TaskRecord | null> {
+  const { data } = await http.post<GetTaskResponse>('/api/tasks/getTask', { taskId })
+  return data.data ?? null
+}
+
 export interface TaskTemplateProperty {
-  type: 'string' | 'number' | 'boolean' | string
+  type: 'string' | 'number' | 'boolean' | 'object' | string
+  description?: string
+  enum?: (string | number)[]
+  required?: string[]
+  properties?: Record<string, TaskTemplateProperty>
+  additionalProperties?: boolean
 }
 
 export interface TaskTemplateSchema {
@@ -90,4 +107,8 @@ export interface AddNewTaskPayload {
 
 export async function addNewTask(payload: AddNewTaskPayload): Promise<void> {
   await http.post('/api/tasks/addNewTask', payload)
+}
+
+export async function resendTask(taskId: number): Promise<void> {
+  await http.post('/api/tasks/resendTask', { taskId })
 }

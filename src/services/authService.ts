@@ -95,6 +95,8 @@ export interface UserRecord {
   user_type: string
   status: string
   last_update: string
+  user_group_id: number | null
+  group_name: string | null
 }
 
 export interface GetUsersResponse {
@@ -106,4 +108,45 @@ export interface GetUsersResponse {
 export async function getUsers(): Promise<UserRecord[]> {
   const { data } = await http.post<GetUsersResponse>('/api/auth/getUsers')
   return data.data
+}
+
+export interface AddUserPayload {
+  user_name: string
+  first_name: string
+  last_name: string
+  user_phone_number: string
+  user_email: string
+  user_type: 1 | 2 | 3
+  password: string
+  user_group_id?: number | null
+}
+
+interface AddUserResponse {
+  status: string
+  data: { userId: number }
+  message: string
+}
+
+export async function addUser(payload: AddUserPayload): Promise<number> {
+  const { data } = await http.post<AddUserResponse>('/api/auth/addNewUser', payload)
+  return data.data.userId
+}
+
+export interface UpdateUserPayload {
+  userId: number
+  firstName: string
+  lastName: string
+  phoneNumber: string
+  email: string
+  userGroupId?: number | null
+}
+
+interface UpdateUserResponse {
+  status: string
+  data: { userId: number }
+  message: string
+}
+
+export async function updateUser(payload: UpdateUserPayload): Promise<void> {
+  await http.post<UpdateUserResponse>('/api/auth/updateUser', payload)
 }

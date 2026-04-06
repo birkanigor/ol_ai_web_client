@@ -1,8 +1,17 @@
 <template>
   <div class="card">
     <div class="card-header">
-      <span>Users</span>
-      <span v-if="!loading && !fetchFailed" class="count-badge">{{ users.length }}</span>
+      <div class="card-header-left">
+        <span>Users</span>
+        <span v-if="!loading && !fetchFailed" class="count-badge">{{ users.length }}</span>
+      </div>
+      <button class="btn-add" @click="openAdd">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+          <line x1="12" y1="5" x2="12" y2="19" />
+          <line x1="5" y1="12" x2="19" y2="12" />
+        </svg>
+        Add User
+      </button>
     </div>
 
     <div v-if="loading" class="state-row">
@@ -28,13 +37,15 @@
             <th>Email</th>
             <th>Phone</th>
             <th>Type</th>
+            <th>Group</th>
             <th>Status</th>
             <th>Last Update</th>
+            <th></th>
           </tr>
         </thead>
         <tbody>
-          <tr v-if="users.length === 0">
-            <td colspan="8" class="empty-cell">No users found.</td>
+          <tr v-if="pagedUsers.length === 0">
+            <td colspan="10" class="empty-cell">No users found.</td>
           </tr>
           <tr v-for="user in pagedUsers" :key="user.id">
             <td class="muted">{{ user.id }}</td>
@@ -48,12 +59,27 @@
               </span>
             </td>
             <td>
+              <span v-if="user.group_name" class="group-badge">{{ user.group_name }}</span>
+              <span v-else class="muted">—</span>
+            </td>
+            <td>
               <span class="status-pill" :class="`status-pill--${user.status.toLowerCase()}`">
                 <span class="status-dot" />
                 {{ user.status }}
               </span>
             </td>
             <td class="muted">{{ user.last_update }}</td>
+            <td class="actions-cell">
+              <button
+                class="row-btn row-btn--edit"
+                title="Edit user"
+                @click="openEdit(user)"
+              >
+                <svg viewBox="0 0 20 20" fill="currentColor">
+                  <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                </svg>
+              </button>
+            </td>
           </tr>
         </tbody>
       </table>
@@ -62,37 +88,50 @@
     <Pagination
       v-if="!loading && !fetchFailed"
       v-model="currentPage"
+      v-model:page-size="pageSize"
       :total="users.length"
-      :page-size="pageSize"
+    />
+
+    <UserModal
+      v-if="showModal"
+      v-model="showModal"
+      :user="editUser"
+      @saved="fetchUsers"
     />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { getUsers, type UserRecord } from '../../services/authService'
 import { useToast } from '../../composables/useToast'
 import Pagination from '../common/Pagination.vue'
+import UserModal from './UserModal.vue'
 
-const PAGE_SIZE = Number(import.meta.env.VITE_PAGE_SIZE) || 5
+const DEFAULT_PAGE_SIZE = Number(import.meta.env.VITE_PAGE_SIZE) || 5
 
-const toast = useToast()
-const users = ref<UserRecord[]>([])
-const loading = ref(false)
+const toast       = useToast()
+const users       = ref<UserRecord[]>([])
+const loading     = ref(false)
 const fetchFailed = ref(false)
 const currentPage = ref(1)
-const pageSize = PAGE_SIZE
+const pageSize    = ref(DEFAULT_PAGE_SIZE)
+const showModal   = ref(false)
+const editUser    = ref<UserRecord | null>(null)
 
 const pagedUsers = computed(() => {
-  const start = (currentPage.value - 1) * pageSize
-  return users.value.slice(start, start + pageSize)
+  if (pageSize.value === 0) return users.value
+  const start = (currentPage.value - 1) * pageSize.value
+  return users.value.slice(start, start + pageSize.value)
 })
 
+watch(pageSize, () => { currentPage.value = 1 })
+
 async function fetchUsers() {
-  loading.value = true
+  loading.value     = true
   fetchFailed.value = false
   try {
-    users.value = await getUsers()
+    users.value   = await getUsers()
     currentPage.value = 1
   } catch {
     fetchFailed.value = true
@@ -100,6 +139,16 @@ async function fetchUsers() {
   } finally {
     loading.value = false
   }
+}
+
+function openAdd() {
+  editUser.value  = null
+  showModal.value = true
+}
+
+function openEdit(user: UserRecord) {
+  editUser.value  = user
+  showModal.value = true
 }
 
 onMounted(fetchUsers)
@@ -118,13 +167,19 @@ onMounted(fetchUsers)
 .card-header {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 18px 24px;
+  justify-content: space-between;
+  padding: 14px 20px;
   border-bottom: 1px solid #f3f4f6;
+  flex-shrink: 0;
+}
+
+.card-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   font-weight: 600;
   color: #1a1f3c;
   font-size: 15px;
-  flex-shrink: 0;
 }
 
 .count-badge {
@@ -135,6 +190,24 @@ onMounted(fetchUsers)
   background: #eff2ff;
   color: #4f6ef7;
 }
+
+.btn-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 14px;
+  background: #4f6ef7;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.btn-add svg { width: 15px; height: 15px; }
+.btn-add:hover { background: #3b56e0; }
 
 .state-row {
   display: flex;
@@ -183,12 +256,12 @@ onMounted(fetchUsers)
   width: 100%;
   border-collapse: collapse;
   font-size: 14px;
-  min-width: 700px;
+  min-width: 800px;
 }
 
 .table th {
   text-align: left;
-  padding: 12px 20px;
+  padding: 12px 16px;
   font-size: 11px;
   font-weight: 600;
   color: #9ca3af;
@@ -200,7 +273,7 @@ onMounted(fetchUsers)
 }
 
 .table td {
-  padding: 13px 20px;
+  padding: 12px 16px;
   color: #374151;
   border-bottom: 1px solid #f9fafb;
   white-space: nowrap;
@@ -222,8 +295,18 @@ onMounted(fetchUsers)
   color: #6b7280;
   letter-spacing: 0.3px;
 }
-.type-badge--admin { background: #fef3c7; color: #d97706; }
-.type-badge--user  { background: #eff2ff; color: #4f6ef7; }
+.type-badge--admin         { background: #fef3c7; color: #d97706; }
+.type-badge--user          { background: #eff2ff; color: #4f6ef7; }
+.type-badge--group_manager { background: #f0fdf4; color: #059669; }
+
+.group-badge {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #f0f4ff;
+  color: #4f6ef7;
+}
 
 .status-pill {
   display: inline-flex;
@@ -245,4 +328,28 @@ onMounted(fetchUsers)
 .status-pill--active               { color: #059669; }
 .status-pill--blocked .status-dot { background: #ef4444; }
 .status-pill--blocked              { color: #dc2626; }
+
+/* ── Row action button ── */
+.actions-cell {
+  text-align: right;
+  width: 48px;
+  padding-right: 12px !important;
+}
+
+.row-btn {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+  border: 1.5px solid;
+  cursor: pointer;
+  transition: background 0.15s;
+  flex-shrink: 0;
+}
+.row-btn svg { width: 15px; height: 15px; }
+
+.row-btn--edit { color: #4f6ef7; background: #eff2ff; border-color: #c7d2fe; }
+.row-btn--edit:hover { background: #e0e7ff; }
 </style>

@@ -10,6 +10,7 @@
             <span v-if="isRequired(String(key))" class="required">*</span>
             <span class="label-hint">object</span>
           </div>
+          <p v-if="prop.description" class="field-desc field-desc--group">{{ prop.description }}</p>
           <div class="schema-group-body">
             <SchemaForm
               :schema="prop"
@@ -21,7 +22,29 @@
         </div>
       </template>
 
-      <!-- Scalar field -->
+      <!-- Scalar field: enum → select -->
+      <template v-else-if="prop.enum && prop.enum.length">
+        <label :for="`sf-${path}-${key}`">
+          {{ key }}
+          <span v-if="isRequired(String(key))" class="required">*</span>
+          <span class="label-hint">{{ prop.type }}</span>
+        </label>
+        <select
+          :id="`sf-${path}-${key}`"
+          :value="modelValue[key] ?? ''"
+          :required="isRequired(String(key))"
+          :disabled="disabled"
+          @change="onInput(String(key), ($event.target as HTMLSelectElement).value, prop.type)"
+        >
+          <option value="" disabled>— select —</option>
+          <option v-for="opt in prop.enum" :key="String(opt)" :value="String(opt)">
+            {{ opt }}
+          </option>
+        </select>
+        <p v-if="prop.description" class="field-desc">{{ prop.description }}</p>
+      </template>
+
+      <!-- Scalar field: free input -->
       <template v-else>
         <label :for="`sf-${path}-${key}`">
           {{ key }}
@@ -37,6 +60,7 @@
           :placeholder="prop.type === 'number' ? '0' : ''"
           @input="onInput(String(key), ($event.target as HTMLInputElement).value, prop.type)"
         />
+        <p v-if="prop.description" class="field-desc">{{ prop.description }}</p>
       </template>
 
     </div>
@@ -108,7 +132,8 @@ label {
   color: #374151;
 }
 
-input {
+input,
+select {
   padding: 8px 12px;
   border: 1.5px solid #d1d5db;
   border-radius: 8px;
@@ -118,19 +143,37 @@ input {
   outline: none;
   transition: border-color 0.2s, box-shadow 0.2s;
   font-family: inherit;
+  width: 100%;
+  box-sizing: border-box;
 }
-input:focus {
+input:focus,
+select:focus {
   border-color: #4f6ef7;
   background: #fff;
   box-shadow: 0 0 0 3px rgba(79, 110, 247, 0.12);
 }
-input:disabled {
+input:disabled,
+select:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
 
 .required    { color: #ef4444; margin-left: 2px; }
 .label-hint  { font-weight: 400; color: #9ca3af; font-size: 11px; margin-left: 5px; }
+
+.field-desc {
+  margin: 0;
+  font-size: 12px;
+  color: #6b7280;
+  line-height: 1.4;
+}
+
+.field-desc--group {
+  padding: 4px 14px 8px;
+  background: #f8fafc;
+  border-bottom: 1px solid #e5e7eb;
+  margin: 0;
+}
 
 .schema-group {
   border: 1.5px solid #e5e7eb;

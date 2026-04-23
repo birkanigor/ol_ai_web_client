@@ -15,28 +15,12 @@
     </header>
 
     <!-- Stat cards -->
-    <div v-if="!loading && !fetchFailed" class="stats-row">
-      <div class="stat-card" @click="setStatusFilter('')">
-        <div class="stat-value">{{ customers.length }}</div>
-        <div class="stat-label">Total</div>
-      </div>
-      <div class="stat-card stat-card--green" @click="setStatusFilter('active')">
-        <div class="stat-value">{{ countByStatus('active') }}</div>
-        <div class="stat-label">Active</div>
-      </div>
-      <div class="stat-card stat-card--grey" @click="setStatusFilter('deactivated')">
-        <div class="stat-value">{{ countByStatus('deactivated') }}</div>
-        <div class="stat-label">Deactivated</div>
-      </div>
-      <div class="stat-card stat-card--yellow" @click="setStatusFilter('suspended')">
-        <div class="stat-value">{{ countByStatus('suspended') }}</div>
-        <div class="stat-label">Suspended</div>
-      </div>
-      <div class="stat-card stat-card--red" @click="setStatusFilter('deleted')">
-        <div class="stat-value">{{ countByStatus('deleted') }}</div>
-        <div class="stat-label">Deleted</div>
-      </div>
-    </div>
+    <StatCardsRow
+      v-if="!loading && !fetchFailed"
+      :cards="customerStatCards"
+      :model-value="filterStatus"
+      @update:model-value="setStatusFilter"
+    />
 
     <!-- Loading -->
     <div v-if="loading" class="state-row">
@@ -90,13 +74,13 @@
       <table class="table">
         <thead>
           <tr>
-            <th>#</th>
-            <th>Name</th>
-            <th>Description</th>
-            <th>Reference ID</th>
-            <th>Billing Address</th>
-            <th>Status</th>
-            <th>Created</th>
+            <th class="th-sort" :class="thClass('id')"                   @click="sortBy('id')">#</th>
+            <th class="th-sort" :class="thClass('customer_name')"        @click="sortBy('customer_name')">Name</th>
+            <th class="th-sort" :class="thClass('customer_description')" @click="sortBy('customer_description')">Description</th>
+            <th class="th-sort" :class="thClass('reference_id')"         @click="sortBy('reference_id')">Reference ID</th>
+            <th class="th-sort" :class="thClass('billing_address')"      @click="sortBy('billing_address')">Billing Address</th>
+            <th class="th-sort" :class="thClass('status_name')"          @click="sortBy('status_name')">Status</th>
+            <th class="th-sort" :class="thClass('created_date')"         @click="sortBy('created_date')">Created</th>
             <th>Config</th>
             <th></th>
           </tr>
@@ -128,6 +112,11 @@
               <pre v-if="expandedConfigs.has(c.id)" class="config-pre">{{ JSON.stringify(c.additional_config, null, 2) }}</pre>
             </td>
             <td class="actions-cell">
+              <button type="button" class="row-btn row-btn--groups" title="Manage groups" @click="openGroupsPanel(c)">
+                <svg viewBox="0 0 20 20" fill="currentColor">
+                  <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v1h8v-1zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-1a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v1h-3zM4.75 14.094A5.973 5.973 0 004 17v1H1v-1a3 3 0 013.75-2.906z" />
+                </svg>
+              </button>
               <button type="button" class="row-btn row-btn--edit" title="Edit customer" @click="openEdit(c)">
                 <svg viewBox="0 0 20 20" fill="currentColor">
                   <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
@@ -175,18 +164,29 @@
       @confirm="confirmDelete"
       @cancel="showConfirm = false; confirmCustomer = null"
     />
+
+    <!-- Customer-Groups drawer -->
+    <CustomerGroupsPanel
+      v-if="groupsPanel && groupsPanelCustomer"
+      :customer-id="groupsPanelCustomer.id"
+      :customer-name="groupsPanelCustomer.customer_name"
+      @close="groupsPanel = false; groupsPanelCustomer = null"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useSortable } from '../composables/useSortable'
 import {
   getCustomers, changeCustomerStatus, type Customer,
 } from '../services/customersService'
 import { useToast } from '../composables/useToast'
 import Pagination from '../components/common/Pagination.vue'
+import StatCardsRow from '../components/common/StatCardsRow.vue'
 import CustomerModal from '../components/customers/CustomerModal.vue'
 import ConfirmModal from '../components/common/ConfirmModal.vue'
+import CustomerGroupsPanel from '../components/customers/CustomerGroupsPanel.vue'
 
 const DEFAULT_PAGE_SIZE = Number(import.meta.env.VITE_PAGE_SIZE) || 5
 
@@ -202,6 +202,13 @@ const editCustomer    = ref<Customer | null>(null)
 const showConfirm     = ref(false)
 const confirmCustomer = ref<Customer | null>(null)
 const deletingId      = ref<number | null>(null)
+const groupsPanel         = ref(false)
+const groupsPanelCustomer = ref<Customer | null>(null)
+
+function openGroupsPanel(c: Customer) {
+  groupsPanelCustomer.value = c
+  groupsPanel.value         = true
+}
 
 // Filters
 const filterName   = ref('')
@@ -230,8 +237,16 @@ function countByStatus(status: string): number {
   return customers.value.filter(c => normalizeStatus(c.status_name) === status).length
 }
 
+const customerStatCards = computed(() => [
+  { value: filteredCustomers.value.length, label: isFiltered.value ? 'Filtered' : 'Total', filterValue: '' },
+  { value: countByStatus('active'),      label: 'Active',      color: 'green'  as const, filterValue: 'active' },
+  { value: countByStatus('deactivated'), label: 'Deactivated', color: 'grey'   as const, filterValue: 'deactivated' },
+  { value: countByStatus('suspended'),   label: 'Suspended',   color: 'yellow' as const, filterValue: 'suspended' },
+  { value: countByStatus('deleted'),     label: 'Deleted',     color: 'red'    as const, filterValue: 'deleted' },
+])
+
 function setStatusFilter(status: string) {
-  filterStatus.value = filterStatus.value === status ? '' : status
+  filterStatus.value = status
   currentPage.value  = 1
 }
 
@@ -257,10 +272,14 @@ const filteredCustomers = computed(() => {
   return list
 })
 
+const { sortBy, applySorted, thClass } = useSortable()
+
+const sortedCustomers = computed(() => applySorted(filteredCustomers.value))
+
 const pagedCustomers = computed(() => {
-  if (pageSize.value === 0) return filteredCustomers.value
+  if (pageSize.value === 0) return sortedCustomers.value
   const start = (currentPage.value - 1) * pageSize.value
-  return filteredCustomers.value.slice(start, start + pageSize.value)
+  return sortedCustomers.value.slice(start, start + pageSize.value)
 })
 
 function toggleConfig(id: number) {
@@ -301,11 +320,19 @@ onMounted(fetchCustomers)
 </script>
 
 <style scoped>
-.page { display: flex; flex-direction: column; gap: 24px; }
+.page {
+  padding: 32px 24px;
+  width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
 
 /* ── Header ── */
 .page-header {
   display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;
+  flex-wrap: wrap;
 }
 .page-header h1 { margin: 0; font-size: 22px; font-weight: 700; color: #1a1f3c; }
 .page-subtitle { margin: 4px 0 0; font-size: 14px; color: #6b7280; }
@@ -320,22 +347,6 @@ onMounted(fetchCustomers)
 .btn-refresh svg { width: 16px; height: 16px; }
 .btn-refresh:hover:not(:disabled) { background: #f9fafb; }
 .btn-refresh:disabled { opacity: 0.5; cursor: not-allowed; }
-
-/* ── Stat cards ── */
-.stats-row { display: flex; gap: 14px; flex-wrap: wrap; }
-.stat-card {
-  flex: 1; min-width: 110px; padding: 16px 20px;
-  background: #fff; border-radius: 12px;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.07);
-  cursor: pointer; transition: box-shadow 0.15s, transform 0.1s;
-}
-.stat-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.1); transform: translateY(-1px); }
-.stat-value { font-size: 26px; font-weight: 700; color: #1a1f3c; line-height: 1.1; }
-.stat-label { font-size: 12px; font-weight: 600; color: #9ca3af; margin-top: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
-.stat-card--green  .stat-value { color: #059669; }
-.stat-card--grey   .stat-value { color: #6b7280; }
-.stat-card--yellow .stat-value { color: #d97706; }
-.stat-card--red    .stat-value { color: #dc2626; }
 
 /* ── State rows ── */
 .state-row {
@@ -459,7 +470,7 @@ onMounted(fetchCustomers)
 }
 
 /* ── Row action buttons ── */
-.actions-cell { text-align: right; white-space: nowrap; width: 90px; padding-right: 12px !important; }
+.actions-cell { text-align: right; white-space: nowrap; width: 116px; padding-right: 12px !important; }
 .row-btn {
   width: 32px; height: 32px;
   display: inline-flex; align-items: center; justify-content: center;
@@ -469,6 +480,8 @@ onMounted(fetchCustomers)
 .row-btn + .row-btn { margin-left: 6px; }
 .row-btn svg { width: 15px; height: 15px; }
 
+.row-btn--groups { color: #059669; background: #ecfdf5; border-color: #6ee7b7; }
+.row-btn--groups:hover { background: #d1fae5; }
 .row-btn--edit   { color: #4f6ef7; background: #eff2ff; border-color: #c7d2fe; }
 .row-btn--edit:hover { background: #e0e7ff; }
 .row-btn--delete { color: #dc2626; background: #fef2f2; border-color: #fca5a5; }
@@ -478,10 +491,16 @@ onMounted(fetchCustomers)
 .spin { animation: spin 0.7s linear infinite; }
 
 @media (max-width: 768px) {
-  .stats-row { gap: 10px; }
-  .stat-card { min-width: 90px; padding: 12px 14px; }
+  .page { padding: 20px 12px; }
   .table-toolbar { flex-direction: column; align-items: stretch; }
   .filters { flex-direction: column; align-items: stretch; }
   .filter-input, .filter-select { width: 100%; }
 }
+
+/* ── Sortable column headers ── */
+.th-sort { cursor: pointer; user-select: none; white-space: nowrap; }
+.th-sort::after { content: ' ↕'; color: #d1d5db; font-size: 10px; }
+.th-sort--asc::after  { content: ' ↑'; color: #4f6ef7; }
+.th-sort--desc::after { content: ' ↓'; color: #4f6ef7; }
+.th-sort:hover { color: #374151; }
 </style>

@@ -392,6 +392,7 @@ function removeEmail(i: number) {
 function onBackspace() {
   if (emailDraft.value === '' && emails.value.length) {
     emails.value.pop()
+    chipInputRef.value?.focus()
   }
 }
 

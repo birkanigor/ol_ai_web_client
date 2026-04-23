@@ -26,55 +26,46 @@
 
     <NewTaskModal v-model="showModal" @created="fetchTasks" />
 
+    <!-- Tab bar -->
+    <nav class="tab-bar" role="tablist">
+      <button
+        class="tab"
+        :class="{ 'tab--active': activeTab === 'tasks' }"
+        role="tab"
+        @click="activeTab = 'tasks'"
+      >
+        <svg viewBox="0 0 20 20" fill="currentColor" class="tab-icon">
+          <path fill-rule="evenodd" d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" clip-rule="evenodd" />
+          <path fill-rule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clip-rule="evenodd" />
+        </svg>
+        Tasks
+      </button>
+      <button
+        class="tab"
+        :class="{ 'tab--active': activeTab === 'templates' }"
+        role="tab"
+        @click="activeTab = 'templates'"
+      >
+        <svg viewBox="0 0 20 20" fill="currentColor" class="tab-icon">
+          <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z" />
+        </svg>
+        Templates
+      </button>
+    </nav>
+
     <div class="page-body">
+      <!-- ── Templates tab ── -->
+      <TaskTemplatesPanel v-if="activeTab === 'templates'" />
+
+      <!-- ── Tasks tab ── -->
+      <template v-if="activeTab === 'tasks'">
+
       <!-- Stats -->
-      <div class="stats-row">
-        <div
-          class="stat-card stat-card--clickable"
-          :class="{ 'stat-card--active': filters.status === '' }"
-          title="Show all"
-          @click="setStatusFilter('')"
-        >
-          <div class="stat-value">{{ filteredTasks.length }}</div>
-          <div class="stat-label">{{ isFiltered ? 'Filtered' : 'Total' }}</div>
-        </div>
-        <div
-          class="stat-card stat-card--yellow stat-card--clickable"
-          :class="{ 'stat-card--active': filters.status === 'queued' }"
-          title="Filter by Queued"
-          @click="setStatusFilter('queued')"
-        >
-          <div class="stat-value">{{ countByStatus('queued') }}</div>
-          <div class="stat-label">Queued</div>
-        </div>
-        <div
-          class="stat-card stat-card--blue stat-card--clickable"
-          :class="{ 'stat-card--active': filters.status === 'running' }"
-          title="Filter by Running"
-          @click="setStatusFilter('running')"
-        >
-          <div class="stat-value">{{ countByStatus('running') }}</div>
-          <div class="stat-label">Running</div>
-        </div>
-        <div
-          class="stat-card stat-card--green stat-card--clickable"
-          :class="{ 'stat-card--active': filters.status === 'completed' }"
-          title="Filter by Completed"
-          @click="setStatusFilter('completed')"
-        >
-          <div class="stat-value">{{ countByStatus('completed') }}</div>
-          <div class="stat-label">Completed</div>
-        </div>
-        <div
-          class="stat-card stat-card--red stat-card--clickable"
-          :class="{ 'stat-card--active': filters.status === 'failed' }"
-          title="Filter by Failed"
-          @click="setStatusFilter('failed')"
-        >
-          <div class="stat-value">{{ countByStatus('failed') }}</div>
-          <div class="stat-label">Failed</div>
-        </div>
-      </div>
+      <StatCardsRow
+        :cards="statCards"
+        :model-value="filters.status"
+        @update:model-value="setStatusFilter"
+      />
 
       <!-- Tasks table card -->
       <div class="card">
@@ -154,14 +145,14 @@
           <table class="table">
             <thead>
               <tr>
-                <th>#</th>
-                <th>Application</th>
-                <th>Request</th>
-                <th>User</th>
-                <th>Status</th>
-                <th>Requested At</th>
-                <th>Completed At</th>
-                <th>Last Action</th>
+                <th class="th-sort" :class="thClass('id')"               @click="sortBy('id')">#</th>
+                <th class="th-sort" :class="thClass('application_name')" @click="sortBy('application_name')">Application</th>
+                <th class="th-sort" :class="thClass('request_name')"     @click="sortBy('request_name')">Request</th>
+                <th class="th-sort" :class="thClass('user_name')"        @click="sortBy('user_name')">User</th>
+                <th class="th-sort" :class="thClass('status_name')"      @click="sortBy('status_name')">Status</th>
+                <th class="th-sort" :class="thClass('request_time')"     @click="sortBy('request_time')">Requested At</th>
+                <th class="th-sort" :class="thClass('completion_time')"  @click="sortBy('completion_time')">Completed At</th>
+                <th class="th-sort" :class="thClass('last_action_time')" @click="sortBy('last_action_time')">Last Action</th>
                 <th>Payload</th>
                 <th>Response</th>
                 <th>Error</th>
@@ -234,6 +225,8 @@
           :total="filteredTasks.length"
         />
       </div>
+
+      </template><!-- end tasks tab -->
     </div>
   </div>
 </template>
@@ -244,11 +237,16 @@ import { ElDatePicker } from 'element-plus'
 import { getTasks, getTaskById, resendTask, type TaskRecord } from '../services/tasksService'
 import { getToken, getSessionId } from '../services/authService'
 import { useToast } from '../composables/useToast'
+import { useSortable } from '../composables/useSortable'
 import NewTaskModal from '../components/tasks/NewTaskModal.vue'
+import TaskTemplatesPanel from '../components/tasks/TaskTemplatesPanel.vue'
 import Pagination from '../components/common/Pagination.vue'
+import StatCardsRow from '../components/common/StatCardsRow.vue'
 import { API_BASE_URL } from '../config/api'
 
 const DEFAULT_PAGE_SIZE = Number(import.meta.env.VITE_PAGE_SIZE) || 5
+
+const activeTab = ref<'tasks' | 'templates'>('tasks')
 
 const toast = useToast()
 
@@ -344,8 +342,7 @@ function clearFilters() {
 }
 
 function setStatusFilter(status: string) {
-  // clicking the already-active card toggles it off
-  filters.status = filters.status === status ? '' : status
+  filters.status = status
   currentPage.value = 1
 }
 
@@ -375,10 +372,14 @@ const filteredTasks = computed(() => {
 const userOptions = computed(() => [...new Set(tasks.value.map((t) => t.user_name))].sort())
 const appOptions  = computed(() => [...new Set(tasks.value.map((t) => t.application_name))].sort())
 
+const { sortBy, applySorted, thClass } = useSortable()
+
+const sortedTasks = computed(() => applySorted(filteredTasks.value))
+
 const pagedTasks = computed(() => {
-  if (pageSize.value === 0) return filteredTasks.value
+  if (pageSize.value === 0) return sortedTasks.value
   const start = (currentPage.value - 1) * pageSize.value
-  return filteredTasks.value.slice(start, start + pageSize.value)
+  return sortedTasks.value.slice(start, start + pageSize.value)
 })
 
 // Reset to page 1 whenever filters or page size change
@@ -395,6 +396,14 @@ function normalizeStatus(raw: string | null | undefined): string {
 function countByStatus(status: string): number {
   return filteredTasks.value.filter((t) => normalizeStatus(t.status_name) === status).length
 }
+
+const statCards = computed(() => [
+  { value: filteredTasks.value.length, label: isFiltered.value ? 'Filtered' : 'Total', filterValue: '' },
+  { value: countByStatus('queued'),    label: 'Queued',    color: 'yellow' as const, filterValue: 'queued' },
+  { value: countByStatus('running'),   label: 'Running',   color: 'blue'   as const, filterValue: 'running' },
+  { value: countByStatus('completed'), label: 'Completed', color: 'green'  as const, filterValue: 'completed' },
+  { value: countByStatus('failed'),    label: 'Failed',    color: 'red'    as const, filterValue: 'failed' },
+])
 
 function togglePayload(id: number) {
   const next = new Set(expandedPayloads.value)
@@ -518,43 +527,47 @@ onBeforeUnmount(disconnectSse)
 @keyframes spin { to { transform: rotate(360deg); } }
 .spinning { animation: spin 0.8s linear infinite; }
 
-.page-body { display: flex; flex-direction: column; gap: 20px; }
-
-.stats-row { display: flex; gap: 14px; flex-wrap: wrap; }
-.stat-card {
-  flex: 1 1 100px;
+/* ── Tab bar ── */
+.tab-bar {
+  display: flex;
+  gap: 2px;
   background: #fff;
-  border-radius: 12px;
-  padding: 16px 20px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.07);
-  border-left: 4px solid #e5e7eb;
-  transition: box-shadow 0.15s, transform 0.15s, background 0.15s;
+  border-radius: 12px 12px 0 0;
+  border: 1px solid #f3f4f6;
+  border-bottom: none;
+  padding: 8px 8px 0;
+  flex-shrink: 0;
 }
-.stat-card--yellow { border-left-color: #f59e0b; }
-.stat-card--blue   { border-left-color: #4f6ef7; }
-.stat-card--green  { border-left-color: #10b981; }
-.stat-card--red    { border-left-color: #ef4444; }
 
-.stat-card--clickable {
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 16px;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: #6b7280;
+  background: transparent;
+  border: none;
+  border-radius: 8px 8px 0 0;
   cursor: pointer;
-  user-select: none;
+  transition: color 0.15s, background 0.15s;
+  white-space: nowrap;
+  position: relative;
 }
-.stat-card--clickable:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
-  transform: translateY(-1px);
+.tab:hover { color: #374151; background: #f9fafb; }
+.tab--active { color: #4f6ef7; font-weight: 600; background: #f5f7ff; }
+.tab--active::after {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 8px; right: 8px;
+  height: 2px;
+  background: #4f6ef7;
+  border-radius: 2px 2px 0 0;
 }
-.stat-card--active {
-  background: #f5f7ff;
-  box-shadow: 0 4px 12px rgba(79, 110, 247, 0.15);
-  transform: translateY(-1px);
-}
-.stat-card--yellow.stat-card--active { background: #fffbeb; box-shadow: 0 4px 12px rgba(245, 158, 11, 0.15); }
-.stat-card--blue.stat-card--active   { background: #eff2ff; box-shadow: 0 4px 12px rgba(79, 110, 247, 0.15); }
-.stat-card--green.stat-card--active  { background: #ecfdf5; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.15); }
-.stat-card--red.stat-card--active    { background: #fef2f2; box-shadow: 0 4px 12px rgba(239, 68, 68, 0.15); }
+.tab-icon { width: 15px; height: 15px; flex-shrink: 0; }
 
-.stat-value { font-size: 28px; font-weight: 700; color: #1a1f3c; }
-.stat-label { font-size: 12px; color: #6b7280; margin-top: 2px; }
+.page-body { display: flex; flex-direction: column; gap: 20px; }
 
 .card {
   background: #fff;
@@ -849,6 +862,12 @@ onBeforeUnmount(disconnectSse)
 
 @media (max-width: 480px) {
   .page { padding: 20px 16px; }
-  .stat-value { font-size: 22px; }
 }
+
+/* ── Sortable column headers ── */
+.th-sort { cursor: pointer; user-select: none; white-space: nowrap; }
+.th-sort::after { content: ' ↕'; color: #d1d5db; font-size: 10px; }
+.th-sort--asc::after  { content: ' ↑'; color: #4f6ef7; }
+.th-sort--desc::after { content: ' ↓'; color: #4f6ef7; }
+.th-sort:hover { color: #374151; }
 </style>

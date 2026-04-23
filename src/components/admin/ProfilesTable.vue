@@ -33,8 +33,8 @@
       <table class="table">
         <thead>
           <tr>
-            <th>#</th>
-            <th>Profile Name</th>
+            <th class="th-sort" :class="thClass('id')"           @click="sortBy('id')">#</th>
+            <th class="th-sort" :class="thClass('profile_name')" @click="sortBy('profile_name')">Profile Name</th>
             <th>Screen Access</th>
             <th></th>
           </tr>
@@ -154,6 +154,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, reactive } from 'vue'
+import { useSortable } from '../../composables/useSortable'
 import Pagination from '../common/Pagination.vue'
 import {
   getProfiles,
@@ -176,10 +177,14 @@ const fetchFailed = ref(false)
 const currentPage = ref(1)
 const pageSize    = ref(DEFAULT_PAGE_SIZE)
 
+const { sortBy, applySorted, thClass } = useSortable()
+
+const sortedProfiles = computed(() => applySorted(profiles.value))
+
 const pagedProfiles = computed(() => {
-  if (pageSize.value === 0) return profiles.value
+  if (pageSize.value === 0) return sortedProfiles.value
   const start = (currentPage.value - 1) * pageSize.value
-  return profiles.value.slice(start, start + pageSize.value)
+  return sortedProfiles.value.slice(start, start + pageSize.value)
 })
 
 watch(pageSize, () => { currentPage.value = 1 })
@@ -498,4 +503,11 @@ async function save() {
   width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.4);
   border-top-color: #fff; border-radius: 50%; animation: spin 0.7s linear infinite; flex-shrink: 0;
 }
+
+/* ── Sortable column headers ── */
+.th-sort { cursor: pointer; user-select: none; white-space: nowrap; }
+.th-sort::after { content: ' ↕'; color: #d1d5db; font-size: 10px; }
+.th-sort--asc::after  { content: ' ↑'; color: #4f6ef7; }
+.th-sort--desc::after { content: ' ↓'; color: #4f6ef7; }
+.th-sort:hover { color: #374151; }
 </style>

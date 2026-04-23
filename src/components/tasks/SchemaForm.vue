@@ -69,11 +69,11 @@
 
 <script setup lang="ts">
 import { type PropType } from 'vue'
-import type { TaskTemplateSchema } from '../../services/tasksService'
+import type { TaskTemplateSchema, TaskTemplateProperty } from '../../services/tasksService'
 
 const props = defineProps({
   schema: {
-    type: Object as PropType<TaskTemplateSchema>,
+    type: Object as PropType<TaskTemplateSchema | TaskTemplateProperty>,
     required: true,
   },
   modelValue: {

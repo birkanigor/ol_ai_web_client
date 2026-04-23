@@ -112,3 +112,30 @@ export async function addNewTask(payload: AddNewTaskPayload): Promise<void> {
 export async function resendTask(taskId: number): Promise<void> {
   await http.post('/api/tasks/resendTask', { taskId })
 }
+
+export interface AddTemplatePayload {
+  request_name: string
+  request_url?: string | null
+  authentication_method?: string | null
+  request_schema?: Record<string, unknown> | null
+}
+
+export async function addTemplate(payload: AddTemplatePayload): Promise<{ id: number }> {
+  const { data } = await http.post<{ status: string; data: { id: number }; message: string }>(
+    '/api/tasks/addTemplate',
+    payload,
+  )
+  return data.data
+}
+
+export interface UpdateTemplatePayload {
+  id: number
+  request_name?: string
+  request_url?: string | null
+  authentication_method?: string | null
+  request_schema?: Record<string, unknown> | null
+}
+
+export async function updateTemplate(payload: UpdateTemplatePayload): Promise<void> {
+  await http.post('/api/tasks/updateTemplate', payload)
+}

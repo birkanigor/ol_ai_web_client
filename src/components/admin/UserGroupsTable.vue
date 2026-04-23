@@ -33,12 +33,12 @@
       <table class="table">
         <thead>
           <tr>
-            <th>#</th>
-            <th>Group Name</th>
-            <th>Profile</th>
-            <th>Status</th>
-            <th>Created</th>
-            <th>Last Updated</th>
+            <th class="th-sort" :class="thClass('id')"           @click="sortBy('id')">#</th>
+            <th class="th-sort" :class="thClass('group_name')"   @click="sortBy('group_name')">Group Name</th>
+            <th class="th-sort" :class="thClass('profile_name')" @click="sortBy('profile_name')">Profile</th>
+            <th class="th-sort" :class="thClass('group_status')" @click="sortBy('group_status')">Status</th>
+            <th class="th-sort" :class="thClass('created_at')"   @click="sortBy('created_at')">Created</th>
+            <th class="th-sort" :class="thClass('last_updated')" @click="sortBy('last_updated')">Last Updated</th>
             <th></th>
           </tr>
         </thead>
@@ -70,6 +70,11 @@
             <td class="muted">{{ group.created_at ?? '—' }}</td>
             <td class="muted">{{ group.last_updated ?? '—' }}</td>
             <td class="action-cell">
+              <button class="btn-customers" title="Manage customers" @click="openCustomersPanel(group)">
+                <svg viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm3 1h6v1H7V5zm0 3h6v1H7V8zm0 3h4v1H7v-1z" clip-rule="evenodd" />
+                </svg>
+              </button>
               <button class="btn-edit" title="Edit group" @click="openEdit(group)">
                 <svg viewBox="0 0 20 20" fill="currentColor">
                   <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
@@ -151,11 +156,21 @@
       </div>
     </div>
   </Teleport>
+
+  <!-- Group-Customers drawer -->
+  <GroupCustomersPanel
+    v-if="customersPanel && customersPanelGroup"
+    :user-group-id="customersPanelGroup.id"
+    :group-name="customersPanelGroup.group_name ?? ''"
+    @close="customersPanel = false; customersPanelGroup = null"
+  />
 </template>
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, reactive } from 'vue'
+import { useSortable } from '../../composables/useSortable'
 import Pagination from '../common/Pagination.vue'
+import GroupCustomersPanel from './GroupCustomersPanel.vue'
 import { getGroups, getProfiles, addGroup, updateGroup, type UserGroup, type Profile } from '../../services/userGroupsService'
 import { useToast } from '../../composables/useToast'
 
@@ -169,10 +184,14 @@ const fetchFailed = ref(false)
 const currentPage = ref(1)
 const pageSize    = ref(DEFAULT_PAGE_SIZE)
 
+const { sortBy, applySorted, thClass } = useSortable()
+
+const sortedGroups = computed(() => applySorted(groups.value))
+
 const pagedGroups = computed(() => {
-  if (pageSize.value === 0) return groups.value
+  if (pageSize.value === 0) return sortedGroups.value
   const start = (currentPage.value - 1) * pageSize.value
-  return groups.value.slice(start, start + pageSize.value)
+  return sortedGroups.value.slice(start, start + pageSize.value)
 })
 
 watch(pageSize, () => { currentPage.value = 1 })
@@ -203,6 +222,15 @@ onMounted(() => {
   fetchGroups()
   fetchProfiles()
 })
+
+// ── Group-Customers drawer ────────────────────────────────────────────────────
+const customersPanel     = ref(false)
+const customersPanelGroup = ref<UserGroup | null>(null)
+
+function openCustomersPanel(group: UserGroup) {
+  customersPanelGroup.value = group
+  customersPanel.value      = true
+}
 
 // ── Modal ────────────────────────────────────────────────────────────────────
 const modalOpen    = ref(false)
@@ -399,7 +427,24 @@ async function save() {
 .muted { color: #9ca3af !important; font-size: 13px; }
 .bold  { font-weight: 600; color: #1a1f3c; }
 
-.action-cell { width: 48px; text-align: center; }
+.action-cell { width: 72px; text-align: right; white-space: nowrap; padding-right: 10px !important; }
+.action-cell > button + button { margin-left: 6px; }
+
+.btn-customers {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  background: #fff;
+  color: #6b7280;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+.btn-customers svg { width: 14px; height: 14px; }
+.btn-customers:hover { border-color: #059669; color: #059669; background: #ecfdf5; }
 
 .btn-edit {
   display: inline-flex;
@@ -582,4 +627,11 @@ async function save() {
   animation: spin 0.7s linear infinite;
   flex-shrink: 0;
 }
+
+/* ── Sortable column headers ── */
+.th-sort { cursor: pointer; user-select: none; white-space: nowrap; }
+.th-sort::after { content: ' ↕'; color: #d1d5db; font-size: 10px; }
+.th-sort--asc::after  { content: ' ↑'; color: #4f6ef7; }
+.th-sort--desc::after { content: ' ↓'; color: #4f6ef7; }
+.th-sort:hover { color: #374151; }
 </style>

@@ -6,6 +6,7 @@ import TasksView from '../views/TasksView.vue'
 import AdminView from '../views/AdminView.vue'
 import CustomersView from '../views/CustomersView.vue'
 import ReportsView from '../views/ReportsView.vue'
+import AutomationsView from '../views/AutomationsView.vue'
 
 const routes: RouteRecordRaw[] = [
   {
@@ -32,6 +33,11 @@ const routes: RouteRecordRaw[] = [
         path: 'customers',
         name: 'Customers',
         component: CustomersView,
+      },
+      {
+        path: 'automations',
+        name: 'Automations',
+        component: AutomationsView,
       },
       {
         path: 'reports',

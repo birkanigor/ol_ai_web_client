@@ -14,28 +14,12 @@
     </header>
 
     <!-- Stats row -->
-    <div v-if="!loading && !fetchFailed" class="stats-row">
-      <div class="stat-card">
-        <div class="stat-value">{{ reports.length }}</div>
-        <div class="stat-label">Total</div>
-      </div>
-      <div class="stat-card stat-card--green">
-        <div class="stat-value">{{ countByStatus('active') }}</div>
-        <div class="stat-label">Active</div>
-      </div>
-      <div class="stat-card stat-card--blue">
-        <div class="stat-value">{{ countByStatus('running') }}</div>
-        <div class="stat-label">Running</div>
-      </div>
-      <div class="stat-card stat-card--grey">
-        <div class="stat-value">{{ countByStatus('inactive') }}</div>
-        <div class="stat-label">Inactive</div>
-      </div>
-      <div class="stat-card stat-card--red">
-        <div class="stat-value">{{ countByStatus('error') }}</div>
-        <div class="stat-label">Error</div>
-      </div>
-    </div>
+    <StatCardsRow
+      v-if="!loading && !fetchFailed"
+      :cards="reportStatCards"
+      :model-value="filterStatus"
+      @update:model-value="val => { filterStatus = val; currentPage = 1 }"
+    />
 
     <!-- Loading -->
     <div v-if="loading" class="state-row">
@@ -56,6 +40,35 @@
     <div v-else class="table-wrap">
       <!-- Table toolbar -->
       <div class="table-toolbar">
+        <div class="filters">
+          <input
+            v-model="filterName"
+            class="filter-input"
+            type="text"
+            placeholder="Search by name…"
+          />
+          <select v-model="filterUser" class="filter-select">
+            <option value="">All users</option>
+            <option v-for="u in userOptions" :key="u" :value="u">{{ u }}</option>
+          </select>
+          <select v-model="filterStatus" class="filter-select">
+            <option value="">All statuses</option>
+            <option v-for="s in statusOptions" :key="s" :value="s">{{ s }}</option>
+          </select>
+          <ElDatePicker
+            v-model="filterLastRun"
+            type="daterange"
+            range-separator="→"
+            start-placeholder="Last run from"
+            end-placeholder="Last run to"
+            format="YYYY-MM-DD"
+            value-format="YYYY-MM-DD"
+            :clearable="true"
+            :shortcuts="dateShortcuts"
+            class="ep-range-picker"
+          />
+          <button v-if="isFiltered" class="btn-clear" @click="clearFilters">Clear</button>
+        </div>
         <button class="btn-new" @click="editReport = null; showModal = true">
           <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd"/></svg>
           New Report
@@ -65,14 +78,15 @@
       <table class="table">
         <thead>
           <tr>
-            <th>#</th>
-            <th>Report Name</th>
-            <th>Source</th>
-            <th>Format</th>
+            <th class="th-sort" :class="thClass('id')"             @click="sortBy('id')">#</th>
+            <th class="th-sort" :class="thClass('report_name')"    @click="sortBy('report_name')">Report Name</th>
+            <th class="th-sort" :class="thClass('user_name')"      @click="sortBy('user_name')">Created By</th>
+            <th class="th-sort" :class="thClass('source_name')"    @click="sortBy('source_name')">Source</th>
+            <th class="th-sort" :class="thClass('result_format')"  @click="sortBy('result_format')">Format</th>
             <th>Schedule</th>
             <th>Delivery List</th>
-            <th>Status</th>
-            <th>Last Run</th>
+            <th class="th-sort" :class="thClass('status_name')"    @click="sortBy('status_name')">Status</th>
+            <th class="th-sort" :class="thClass('last_run_time')"  @click="sortBy('last_run_time')">Last Run</th>
             <th>Query</th>
             <th>Error</th>
             <th></th>
@@ -80,11 +94,18 @@
         </thead>
         <tbody>
           <tr v-if="pagedReports.length === 0">
-            <td colspan="11" class="empty-cell">No reports found.</td>
+            <td colspan="12" class="empty-cell">No reports found.</td>
           </tr>
           <tr v-for="report in pagedReports" :key="report.id">
             <td class="muted id-cell">{{ report.id }}</td>
             <td class="bold">{{ report.report_name ?? '—' }}</td>
+            <td>
+              <span v-if="report.user_name" class="user-badge">
+                <svg viewBox="0 0 20 20" fill="currentColor" class="user-icon"><path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd"/></svg>
+                {{ report.user_name }}
+              </span>
+              <span v-else class="muted">—</span>
+            </td>
             <td><span v-if="report.source_name" class="source-badge">{{ report.source_name }}</span><span v-else class="muted">—</span></td>
             <td><span v-if="report.result_format" class="format-badge">{{ report.result_format }}</span><span v-else class="muted">—</span></td>
             <td><code v-if="report.report_scheduler" class="cron">{{ report.report_scheduler }}</code><span v-else class="muted">—</span></td>
@@ -170,7 +191,7 @@
       v-if="!loading && !fetchFailed"
       v-model="currentPage"
       v-model:page-size="pageSize"
-      :total="reports.length"
+      :total="filteredReports.length"
     />
 
     <NewReportModal
@@ -195,11 +216,14 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ElDatePicker } from 'element-plus'
+import { useSortable } from '../composables/useSortable'
 import { getScheduledReports, getReportById, runReport, deleteReport, type ScheduledReport } from '../services/reportsService'
 import { getToken, getSessionId } from '../services/authService'
 import { API_BASE_URL } from '../config/api'
 import { useToast } from '../composables/useToast'
 import Pagination from '../components/common/Pagination.vue'
+import StatCardsRow from '../components/common/StatCardsRow.vue'
 import NewReportModal from '../components/reports/NewReportModal.vue'
 import ConfirmModal from '../components/common/ConfirmModal.vue'
 
@@ -242,6 +266,59 @@ function normalizeStatus(raw: string | null | undefined): string {
 function countByStatus(status: string): number {
   return reports.value.filter(r => normalizeStatus(r.status_name) === status).length
 }
+
+// ── Filters ───────────────────────────────────────────────────────────────
+
+const filterName    = ref('')
+const filterUser    = ref('')
+const filterStatus  = ref('')
+const filterLastRun = ref<[string, string] | null>(null)
+
+function toISODate(v: string): string {
+  return v.slice(0, 10)
+}
+
+const dateShortcuts = [
+  { text: 'Last 7 days',  value: () => { const t = new Date(); const f = new Date(); f.setDate(f.getDate() - 6);  return [f, t] } },
+  { text: 'Last 30 days', value: () => { const t = new Date(); const f = new Date(); f.setDate(f.getDate() - 29); return [f, t] } },
+  { text: 'Last month',   value: () => { const t = new Date(); const f = new Date(t.getFullYear(), t.getMonth() - 1, 1); t.setDate(0); return [f, t] } },
+  { text: 'Last year',    value: () => { const t = new Date(); const f = new Date(t.getFullYear() - 1, 0, 1); t.setMonth(0, 0); return [f, t] } },
+]
+
+const userOptions   = computed(() => [...new Set(reports.value.map(r => r.user_name).filter(Boolean))].sort() as string[])
+const statusOptions = computed(() => [...new Set(reports.value.map(r => r.status_name).filter(Boolean))].sort() as string[])
+
+const isFiltered = computed(() =>
+  !!(filterName.value || filterUser.value || filterStatus.value || filterLastRun.value)
+)
+
+function clearFilters() {
+  filterName.value    = ''
+  filterUser.value    = ''
+  filterStatus.value  = ''
+  filterLastRun.value = null
+  currentPage.value   = 1
+}
+
+const filteredReports = computed(() => {
+  let list = reports.value
+  if (filterName.value)
+    list = list.filter(r => (r.report_name ?? '').toLowerCase().includes(filterName.value.toLowerCase()))
+  if (filterUser.value)
+    list = list.filter(r => r.user_name === filterUser.value)
+  if (filterStatus.value)
+    list = list.filter(r => normalizeStatus(r.status_name) === normalizeStatus(filterStatus.value))
+  if (filterLastRun.value) {
+    const fromStr = toISODate(filterLastRun.value[0])
+    const toStr   = toISODate(filterLastRun.value[1])
+    list = list.filter(r => {
+      if (!r.last_run_time) return false
+      const d = r.last_run_time.slice(0, 10)
+      return d >= fromStr && d <= toStr
+    })
+  }
+  return list
+})
 
 function handleEdit(report: ScheduledReport) {
   editReport.value = report
@@ -293,10 +370,22 @@ function toggleQuery(id: number) {
   expandedQueries.value = next
 }
 
+const { sortBy, applySorted, thClass } = useSortable()
+
+const sortedReports = computed(() => applySorted(filteredReports.value))
+
+const reportStatCards = computed(() => [
+  { value: filteredReports.value.length, label: isFiltered.value ? 'Filtered' : 'Total', filterValue: '' },
+  { value: countByStatus('active'),   label: 'Active',   color: 'green' as const, filterValue: 'active' },
+  { value: countByStatus('running'),  label: 'Running',  color: 'blue'  as const, filterValue: 'running' },
+  { value: countByStatus('inactive'), label: 'Inactive', color: 'grey'  as const, filterValue: 'inactive' },
+  { value: countByStatus('error'),    label: 'Error',    color: 'red'   as const, filterValue: 'error' },
+])
+
 const pagedReports = computed(() => {
-  if (pageSize.value === 0) return reports.value
+  if (pageSize.value === 0) return sortedReports.value
   const start = (currentPage.value - 1) * pageSize.value
-  return reports.value.slice(start, start + pageSize.value)
+  return sortedReports.value.slice(start, start + pageSize.value)
 })
 
 // ── Server-Sent Events — live refresh on t_rep_reports changes ────────────
@@ -394,10 +483,84 @@ onBeforeUnmount(disconnectSse)
 /* ── Table toolbar ── */
 .table-toolbar {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   padding: 12px 16px 10px;
   border-bottom: 1px solid #e5e7eb;
+  flex-wrap: wrap;
 }
+
+.filters {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.filter-input,
+.filter-select {
+  height: 34px;
+  padding: 0 10px;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 7px;
+  font-size: 13px;
+  color: #374151;
+  outline: none;
+  transition: border-color 0.15s;
+  background: #fff;
+}
+.filter-input:focus,
+.filter-select:focus { border-color: #4f6ef7; }
+.filter-input { min-width: 180px; }
+.filter-select {
+  appearance: none;
+  cursor: pointer;
+  padding-right: 28px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+}
+
+.btn-clear {
+  height: 34px;
+  padding: 0 12px;
+  background: transparent;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #6b7280;
+  cursor: pointer;
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+.btn-clear:hover { background: #f9fafb; }
+
+/* ── Element Plus date-range picker ── */
+.ep-range-picker { height: 34px !important; }
+:deep(.ep-range-picker .el-range-input)   { font-size: 13px !important; color: #374151 !important; }
+:deep(.ep-range-picker .el-range-separator) { color: #9ca3af !important; }
+:deep(.ep-range-picker .el-input__wrapper) {
+  height: 34px !important;
+  border: 1.5px solid #e5e7eb !important;
+  border-radius: 7px !important;
+  box-shadow: none !important;
+}
+:deep(.ep-range-picker .el-input__wrapper:hover)  { border-color: #9ca3af !important; }
+:deep(.ep-range-picker .el-input__wrapper.is-focus) { border-color: #4f6ef7 !important; }
+/* Hide manual time/date text inputs inside the picker popup */
+:deep(.el-date-range-picker__time-header) { display: none !important; }
+
+/* Range highlight colours */
+:global(.el-date-table td.in-range .el-date-table-cell) { background: #dde4fd !important; }
+:global(.el-date-table td.in-range:hover .el-date-table-cell) { background: #c7d0fb !important; }
+:global(.el-date-table td.start-date .el-date-table-cell),
+:global(.el-date-table td.end-date   .el-date-table-cell) { background: #4f6ef7 !important; border-radius: 50% !important; }
+:global(.el-date-table td.start-date .el-date-table-cell__text),
+:global(.el-date-table td.end-date   .el-date-table-cell__text) { color: #fff !important; }
+:global(.el-date-table td.start-date .el-date-table-cell) { border-radius: 50% 0 0 50% !important; }
+:global(.el-date-table td.end-date   .el-date-table-cell) { border-radius: 0 50% 50% 0 !important; }
 
 .btn-new {
   display: inline-flex;
@@ -436,29 +599,6 @@ onBeforeUnmount(disconnectSse)
 .btn-refresh svg { width: 15px; height: 15px; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .spin { animation: spin 0.7s linear infinite; }
-
-/* ── Stat cards ── */
-.stats-row {
-  display: flex;
-  gap: 16px;
-  flex-wrap: wrap;
-  margin-bottom: 24px;
-}
-.stat-card {
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  padding: 16px 24px;
-  min-width: 110px;
-  text-align: center;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-}
-.stat-value { font-size: 28px; font-weight: 700; color: #111827; }
-.stat-label { font-size: 12px; color: #6b7280; margin-top: 2px; text-transform: uppercase; letter-spacing: .5px; }
-.stat-card--green .stat-value { color: #059669; }
-.stat-card--blue  .stat-value { color: #3b56e0; }
-.stat-card--grey  .stat-value { color: #6b7280; }
-.stat-card--red   .stat-value { color: #dc2626; }
 
 /* ── State rows ── */
 .state-row {
@@ -529,6 +669,23 @@ onBeforeUnmount(disconnectSse)
 .nowrap { white-space: nowrap; }
 .id-cell { width: 48px; font-size: 12px; }
 .empty-cell { text-align: center; padding: 40px; color: #9ca3af; }
+
+/* ── User badge ── */
+.user-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #374151;
+  white-space: nowrap;
+}
+.user-icon {
+  width: 13px;
+  height: 13px;
+  color: #9ca3af;
+  flex-shrink: 0;
+}
 
 /* ── Badges ── */
 .source-badge, .format-badge {
@@ -682,8 +839,15 @@ onBeforeUnmount(disconnectSse)
 /* ── Responsive ── */
 @media (max-width: 768px) {
   .page { padding: 20px 12px; }
-  .stats-row { gap: 10px; }
-  .stat-card { padding: 12px 16px; min-width: 80px; }
-  .stat-value { font-size: 22px; }
+  .table-toolbar { flex-direction: column; align-items: stretch; }
+  .filters { flex-direction: column; align-items: stretch; }
+  .filter-input, .filter-select, .ep-range-picker { width: 100% !important; }
 }
+
+/* ── Sortable column headers ── */
+.th-sort { cursor: pointer; user-select: none; white-space: nowrap; }
+.th-sort::after { content: ' ↕'; color: #d1d5db; font-size: 10px; }
+.th-sort--asc::after  { content: ' ↑'; color: #4f6ef7; }
+.th-sort--desc::after { content: ' ↓'; color: #4f6ef7; }
+.th-sort:hover { color: #374151; }
 </style>

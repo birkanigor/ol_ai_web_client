@@ -31,15 +31,15 @@
       <table class="table">
         <thead>
           <tr>
-            <th>#</th>
-            <th>Username</th>
-            <th>Full Name</th>
-            <th>Email</th>
-            <th>Phone</th>
-            <th>Type</th>
-            <th>Group</th>
-            <th>Status</th>
-            <th>Last Update</th>
+            <th class="th-sort" :class="thClass('id')"                @click="sortBy('id')">#</th>
+            <th class="th-sort" :class="thClass('user_name')"         @click="sortBy('user_name')">Username</th>
+            <th class="th-sort" :class="thClass('first_name')"        @click="sortBy('first_name')">Full Name</th>
+            <th class="th-sort" :class="thClass('user_email')"        @click="sortBy('user_email')">Email</th>
+            <th class="th-sort" :class="thClass('user_phone_number')" @click="sortBy('user_phone_number')">Phone</th>
+            <th class="th-sort" :class="thClass('user_type')"         @click="sortBy('user_type')">Type</th>
+            <th class="th-sort" :class="thClass('group_name')"        @click="sortBy('group_name')">Group</th>
+            <th class="th-sort" :class="thClass('status')"            @click="sortBy('status')">Status</th>
+            <th class="th-sort" :class="thClass('last_update')"       @click="sortBy('last_update')">Last Update</th>
             <th></th>
           </tr>
         </thead>
@@ -105,6 +105,7 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { getUsers, type UserRecord } from '../../services/authService'
 import { useToast } from '../../composables/useToast'
+import { useSortable } from '../../composables/useSortable'
 import Pagination from '../common/Pagination.vue'
 import UserModal from './UserModal.vue'
 
@@ -119,10 +120,14 @@ const pageSize    = ref(DEFAULT_PAGE_SIZE)
 const showModal   = ref(false)
 const editUser    = ref<UserRecord | null>(null)
 
+const { sortBy, applySorted, thClass } = useSortable()
+
+const sortedUsers = computed(() => applySorted(users.value))
+
 const pagedUsers = computed(() => {
-  if (pageSize.value === 0) return users.value
+  if (pageSize.value === 0) return sortedUsers.value
   const start = (currentPage.value - 1) * pageSize.value
-  return users.value.slice(start, start + pageSize.value)
+  return sortedUsers.value.slice(start, start + pageSize.value)
 })
 
 watch(pageSize, () => { currentPage.value = 1 })
@@ -352,4 +357,11 @@ onMounted(fetchUsers)
 
 .row-btn--edit { color: #4f6ef7; background: #eff2ff; border-color: #c7d2fe; }
 .row-btn--edit:hover { background: #e0e7ff; }
+
+/* ── Sortable column headers ── */
+.th-sort { cursor: pointer; user-select: none; white-space: nowrap; }
+.th-sort::after { content: ' ↕'; color: #d1d5db; font-size: 10px; }
+.th-sort--asc::after  { content: ' ↑'; color: #4f6ef7; }
+.th-sort--desc::after { content: ' ↓'; color: #4f6ef7; }
+.th-sort:hover { color: #374151; }
 </style>

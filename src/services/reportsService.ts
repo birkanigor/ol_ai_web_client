@@ -28,6 +28,8 @@ export interface ScheduledReport {
   status_name: string | null
   last_run_time: string | null
   runtime_error: string | null
+  user_id: number | null
+  user_name: string | null
 }
 
 interface GetScheduledReportsResponse {
